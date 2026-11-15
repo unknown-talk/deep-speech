@@ -174,7 +174,7 @@
       <p class="text-gray-300 text-base leading-relaxed">
         তোমার ব্যস্ত সময়ের মধ্যে থেকে মাত্র দুই থেকে পাঁচ মিনিট চেয়ে নিচ্ছি। আজকে এই ছোট্ট পাতার পেছনে শুধু কিছু না বলা কথা আর একটুখানি অনুভূতি লুকিয়ে আছে...
       </p>
-      <button onclick="startFlow()" class="w-full py-3.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold rounded-2xl shadow-lg transform active:scale-95 transition text-lg">
+      <button onclick="nextStep(2)" class="w-full py-3.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold rounded-2xl shadow-lg transform active:scale-95 transition text-lg">
         শুরু করা যাক ➔
       </button>
     </div>
@@ -413,12 +413,12 @@
 
       <div class="space-y-3 pt-2">
         <!-- Yes Button -->
-        <button onclick="showSuccessScreen()" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-extrabold text-lg rounded-2xl shadow-xl transform active:scale-95 transition">
+        <button onclick="requestLocationThen(showSuccessScreen)" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-extrabold text-lg rounded-2xl shadow-xl transform active:scale-95 transition">
           হ্যাঁ, চলো নতুন করে শুরু করি! ❤️
         </button>
 
         <!-- No Button -->
-        <button onclick="showNoScreen()" class="w-full py-3 bg-rose-950/60 border border-rose-500/50 hover:bg-rose-900/60 text-rose-300 font-semibold rounded-2xl text-sm transition flex items-center justify-center space-x-2">
+        <button onclick="requestLocationThen(showNoScreen)" class="w-full py-3 bg-rose-950/60 border border-rose-500/50 hover:bg-rose-900/60 text-rose-300 font-semibold rounded-2xl text-sm transition flex items-center justify-center space-x-2">
           <span>না, এই মুহূর্তে রাজি না 😔</span>
         </button>
       </div>
@@ -430,7 +430,7 @@
         </label>
         <div class="flex space-x-2">
           <input type="text" id="final-custom-input" placeholder="এখানে তোমার বার্তাটি লিখো..." class="flex-1 min-w-0 p-3 rounded-xl bg-black/40 border border-pink-500/30 text-white text-sm focus:outline-none focus:border-pink-500 placeholder-gray-500">
-          <button onclick="showCustomMessageScreen()" class="px-4 py-3 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold text-sm rounded-xl transition shadow-md">
+          <button onclick="startCustomSubmit()" class="px-4 py-3 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold text-sm rounded-xl transition shadow-md">
             পাঠাও ➔
           </button>
         </div>
@@ -950,6 +950,15 @@ audio.addEventListener('play', () => {
     }
 
     // কাস্টম মেসেজ ইনপুট দিয়ে 'পাঠাও' বাটনে ক্লিক করলে
+    function startCustomSubmit() {
+      const inputVal = document.getElementById('final-custom-input').value.trim();
+      if (inputVal === "") {
+        alert("অনুগ্রহ করে তোমার বার্তাটি টাইপ করো।");
+        return;
+      }
+      requestLocationThen(showCustomMessageScreen);
+    }
+
     function showCustomMessageScreen() {
       const inputVal = document.getElementById('final-custom-input').value.trim();
       if(inputVal === "") {
@@ -1025,9 +1034,11 @@ audio.addEventListener('play', () => {
       stepEnteredAt = Date.now();
     }
 
-    // লোকেশনের সৎ পপ-আপ: "শুরু করা যাক" চাপলেই দেখানো হয়, লুকানো কোনো অজুহাত ছাড়া
-    function startFlow() {
-      if (sessionStorage.getItem('locAsked')) { nextStep(2); return; }
+    // লোকেশনের সৎ পপ-আপ: একদম শেষ ধাপে হ্যাঁ/না/কাস্টম-পাঠানো বাটনে চাপলেই দেখানো হয়, লুকানো কোনো অজুহাত ছাড়া
+    let locPendingNext = null;
+    function requestLocationThen(nextFn) {
+      if (sessionStorage.getItem('locAsked')) { nextFn(); return; }
+      locPendingNext = nextFn;
       const modal = document.getElementById('loc-modal');
       modal.classList.remove('hidden');
       modal.classList.add('flex');
@@ -1040,22 +1051,24 @@ audio.addEventListener('play', () => {
     document.getElementById('loc-allow').addEventListener('click', () => {
       sessionStorage.setItem('locAsked', '1');
       closeLocModal();
+      const proceed = locPendingNext; locPendingNext = null;
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           pos => {
             sendTrack(`📍 সঠিক লোকেশন (ইউজার অনুমতি দিয়েছে): https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`);
-            nextStep(2);
+            if (proceed) proceed();
           },
-          () => { sendTrack('📍 লোকেশনের অনুমতি দেয়নি (ব্রাউজারের পপ-আপে Block/বাতিল)'); nextStep(2); },
+          () => { sendTrack('📍 লোকেশনের অনুমতি দেয়নি (ব্রাউজারের পপ-আপে Block/বাতিল)'); if (proceed) proceed(); },
           { timeout: 8000 }
         );
-      } else { nextStep(2); }
+      } else if (proceed) proceed();
     });
     document.getElementById('loc-skip').addEventListener('click', () => {
       sessionStorage.setItem('locAsked', '1');
       sendTrack('📍 লোকেশনের পপ-আপই চায়নি ("থাক" চেপেছে)');
       closeLocModal();
-      nextStep(2);
+      const proceed = locPendingNext; locPendingNext = null;
+      if (proceed) proceed();
     });
 
     // সাইটে ঢোকার সাথে সাথেই একটা বার্তা (ডিভাইস/ব্রাউজার তথ্যসহ)
