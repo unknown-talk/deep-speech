@@ -128,6 +128,20 @@
     <!-- আলো ছড়ানোর স্তর (ধাপ ৪ → ৫) -->
     <div id="bloom-wrap" class="hidden"><div id="bloom"></div></div>
 
+    <!-- লোকেশন চাওয়ার সৎ, স্পষ্ট পপ-আপ (কোনো লুকানো অজুহাত নেই) -->
+    <div id="loc-modal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/60 p-4">
+      <div class="card-glass rounded-2xl p-5 max-w-xs w-full text-center space-y-4">
+        <div class="text-3xl">📍</div>
+        <p class="text-sm text-gray-200 leading-relaxed">
+          এই ওয়েবসাইটটি তোমার লোকেশন জানতে চাইছে। অনুমতি দিলে ব্রাউজারের পপ-আপে তোমার লোকেশন দেখাবে। অনুমতি না দিলেও ওয়েবসাইট স্বাভাবিকভাবেই চলবে।
+        </p>
+        <div class="flex gap-2">
+          <button id="loc-allow" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-semibold text-sm transition">অনুমতি দাও</button>
+          <button id="loc-skip" class="flex-1 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-200 font-semibold text-sm transition">থাক</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Step Indicator Header (শুরু, ২, ৩, ৪, ৫, ফিনিশ) -->
     <div id="progress-header" class="mb-6">
       <div class="flex justify-between items-center text-[10px] sm:text-xs font-semibold text-pink-300 mb-2 px-1">
@@ -155,12 +169,12 @@
       </div>
       <!-- সিক্রেট নামটি এখানে বসাবেন -->
       <h1 class="text-3xl font-bold text-pink-300 leading-tight">
-        Welcome, <span class="text-rose-400 underline underline-offset-4 decoration-pink-500">jarin</span>!
+        Welcome, <span class="text-rose-400 underline underline-offset-4 decoration-pink-500">[এখানে সিক্রেট নাম দিন]</span>!
       </h1>
       <p class="text-gray-300 text-base leading-relaxed">
         তোমার ব্যস্ত সময়ের মধ্যে থেকে মাত্র দুই থেকে পাঁচ মিনিট চেয়ে নিচ্ছি। আজকে এই ছোট্ট পাতার পেছনে শুধু কিছু না বলা কথা আর একটুখানি অনুভূতি লুকিয়ে আছে...
       </p>
-      <button onclick="nextStep(2)" class="w-full py-3.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold rounded-2xl shadow-lg transform active:scale-95 transition text-lg">
+      <button onclick="startFlow()" class="w-full py-3.5 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold rounded-2xl shadow-lg transform active:scale-95 transition text-lg">
         শুরু করা যাক ➔
       </button>
     </div>
@@ -493,6 +507,7 @@
     }
 
     function nextStep(step) {
+      trackStepChange(currentStep, step);
       document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
       document.getElementById(`step-${step}`).classList.remove('hidden');
       currentStep = step;
@@ -522,6 +537,12 @@
 
     // হার্টবিট ট্রানজিশন এবং ৫ সেকেন্ড কাউন্টডাউন লজিক
     function startHeartbeatTransition() {
+      const checkedQuiz = document.querySelector('input[name="quiz"]:checked');
+      if (checkedQuiz) {
+        lastQuizAnswerText = (checkedQuiz.value === 'Custom')
+          ? ('অন্য কিছু লিখেছে: ' + ((document.getElementById('custom-text').value || '').trim() || '(খালি)'))
+          : (checkedQuiz.nextElementSibling ? checkedQuiz.nextElementSibling.textContent.trim() : checkedQuiz.value);
+      }
       nextStep(4);
       let count = 5;
       const counterEl = document.getElementById('countdown-number');
@@ -632,6 +653,25 @@
     }
     const music = { before: makeTrack('music_start.mp3'), after: makeTrack('music_step5.mp3') };
 
+    // প্রতিটা মিউজিক আসলে কতক্ষণ বেজেছে তার হিসাব (লুপ করলেও ঠিকভাবে যোগ হয়)
+    const musicListenSec = { before: 0, after: 0 };
+    const musicLastTick = { before: null, after: null };
+    function musicTrackLabel(key) { return key === 'before' ? 'শুরুর মিউজিক' : 'ধাপ ৫-এর মিউজিক'; }
+    ['before', 'after'].forEach(key => {
+      music[key].el.addEventListener('timeupdate', () => {
+        const now = music[key].el.currentTime;
+        const last = musicLastTick[key];
+        if (last !== null) {
+          const delta = now - last;
+          if (delta > 0 && delta < 2) musicListenSec[key] += delta;   // লুপ হয়ে শুরুতে ফিরলে এই মুহূর্তটা বাদ
+        }
+        musicLastTick[key] = now;
+      });
+    });
+    function musicListenSummary() {
+      return `${musicTrackLabel('before')}: ~${Math.round(musicListenSec.before)} সে., ${musicTrackLabel('after')}: ~${Math.round(musicListenSec.after)} সে.`;
+    }
+
     let stage = 'before';    // before | after | finish
     let wantMusic = true;    // ইউজার বন্ধ করলে false
     let started = false;     // মিউজিক আসলেই বেজে উঠেছে কিনা
@@ -741,15 +781,19 @@
     ['click', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, gestureStart, true));
 
     function toggleMusic() {
+      const stepNow = stepLabelMap[currentStep] || currentStep;
+      const trackNow = musicTrackLabel(stage === 'after' ? 'after' : 'before');
       if (!started) {
         wantMusic = true;
         gestureStart();
         updateMusicButton();
+        sendTrack(`🔊 মিউজিক বাটনে চেপে চালু করল (ধাপ: ${stepNow}, তখনকার ট্র্যাক: ${trackNow})`);
         return;
       }
       wantMusic = !wantMusic;
       syncMusic(800);
       updateMusicButton();
+      sendTrack(`${wantMusic ? '🔊 মিউজিক চালু করল' : '🔇 মিউজিক বন্ধ করল'} (ধাপ: ${stepNow}, তখনকার ট্র্যাক: ${trackNow})\n🎵 এখন পর্যন্ত শোনা: ${musicListenSummary()}`);
     }
 
     // ধাপ বদলালে মিউজিক বদলায় (আর থেমে থাকলে আবার চালু হয়)
@@ -782,6 +826,7 @@
     }
     function setVideoActive(v) {
       if (videoActive === v) return;
+      if (v) videoWasPlayed = true;
       videoActive = v;
       if (v && !audio.paused) {   // ভিডিও শুরু হলে কবিতার ভয়েস থামাও, যাতে দুটো একসাথে না বাজে
         audio.pause();
@@ -827,12 +872,15 @@
     }
 
     // কবিতার ভয়েস চললে মিউজিক নিচু (আর ভিডিও চলতে থাকলে সেটা থামে), থামলে আবার আগের মাপে
-    audio.addEventListener('play', () => {
+audio.addEventListener('play', () => {
       voiceActive = true;
+      voicePlayedOnce = true;
       if (videoActive) ytSend({ event: 'command', func: 'pauseVideo', args: [] });
       syncMusic(700);
     });
     ['pause', 'ended'].forEach(ev => audio.addEventListener(ev, () => { voiceActive = false; syncMusic(1200); }));
+    audio.addEventListener('timeupdate', () => { if (audio.currentTime > voiceMaxReached) voiceMaxReached = audio.currentTime; });
+    audio.addEventListener('ended', () => { voiceCompleted = true; });
 
     // পাতা খুললেই চালানোর চেষ্টা (ব্রাউজার ব্লক করলে প্রথম ট্যাপে শুরু হবে)
     syncMusic(3000);
@@ -887,6 +935,7 @@
 
     // 'Yes' বাটনে ক্লিক করলে
     function showSuccessScreen() {
+      sendTrack(`🎉 ফাইনাল উত্তর: হ্যাঁ ✅ (মোট সময় ${Math.round((Date.now()-sessionStart)/1000)} সে.)`);
       document.getElementById('progress-header').classList.add('hidden');
       document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
       document.getElementById('step-success').classList.remove('hidden');
@@ -894,6 +943,7 @@
 
     // 'No' বাটনে ক্লিক করলে
     function showNoScreen() {
+      sendTrack(`💔 ফাইনাল উত্তর: না (মোট সময় ${Math.round((Date.now()-sessionStart)/1000)} সে.)`);
       document.getElementById('progress-header').classList.add('hidden');
       document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
       document.getElementById('step-no').classList.remove('hidden');
@@ -906,10 +956,116 @@
         alert("অনুগ্রহ করে তোমার বার্তাটি টাইপ করো।");
         return;
       }
+      sendTrack(`✍️ কাস্টম উত্তর লিখেছে: "${inputVal}" (মোট সময় ${Math.round((Date.now()-sessionStart)/1000)} সে.)`);
       document.getElementById('progress-header').classList.add('hidden');
       document.querySelectorAll('.step-content').forEach(el => el.classList.add('hidden'));
       document.getElementById('step-custom-success').classList.remove('hidden');
     }
+
+    // ===== টেলিগ্রাম ট্র্যাকিং =====
+    const SESSION_ID = Math.random().toString(36).slice(2, 8).toUpperCase();
+    const sessionStart = Date.now();
+    let stepEnteredAt = Date.now();
+    const stepLabelMap = { 1: 'শুরু', 2: 'কবিতা', 3: 'কুইজ', 4: 'সাসপেন্স', 5: 'কথা', secret: 'শেষ কথা', 6: 'ফিনিশ' };
+
+    let voicePlayedOnce = false, voiceMaxReached = 0, voiceCompleted = false;
+    let videoWasPlayed = false;
+    let lastQuizAnswerText = null;
+
+    function deviceInfo() {
+      const ua = navigator.userAgent;
+      const isTablet = /iPad|Tablet/i.test(ua) || (isIOS && navigator.maxTouchPoints > 1 && !/iPhone/i.test(ua));
+      const isMobile = !isTablet && (/Mobi|Android/i.test(ua) || isIOS);
+      const deviceType = isTablet ? 'ট্যাবলেট' : (isMobile ? 'মোবাইল' : 'কম্পিউটার');
+      let os = 'অজানা';
+      if (/Android/i.test(ua)) os = 'Android';
+      else if (isIOS) os = 'iOS';
+      else if (/Windows/i.test(ua)) os = 'Windows';
+      else if (/Mac/i.test(ua)) os = 'Mac';
+      else if (/Linux/i.test(ua)) os = 'Linux';
+      let browser = 'অজানা';
+      if (/Edg\//.test(ua)) browser = 'Edge';
+      else if (/OPR\//.test(ua)) browser = 'Opera';
+      else if (/Chrome\//.test(ua)) browser = 'Chrome';
+      else if (/Firefox\//.test(ua)) browser = 'Firefox';
+      else if (/Safari\//.test(ua)) browser = 'Safari';
+      return `${deviceType} | ${os} | ${browser} | ${screen.width}x${screen.height}`;
+    }
+
+    function sendTrack(text) {
+      try {
+        const payload = JSON.stringify({ text: `🔔 [${SESSION_ID}]\n${text}` });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/track', new Blob([payload], { type: 'application/json' }));
+        } else {
+          fetch('/api/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: payload, keepalive: true }).catch(() => {});
+        }
+      } catch (e) {}
+    }
+
+    function trackStepChange(fromStep, toStep) {
+      if (fromStep === toStep) return;
+      const secs = Math.round((Date.now() - stepEnteredAt) / 1000);
+      let extra = '';
+      if (fromStep === 2) {
+        const durKnown = isFinite(audio.duration) && audio.duration > 0;
+        const durTxt = durKnown ? Math.round(audio.duration) + ' সে.' : '?';
+        let voiceLine;
+        if (!voicePlayedOnce) voiceLine = 'শোনেনি';
+        else if (voiceCompleted) voiceLine = 'পুরোটা শুনেছে';
+        else voiceLine = `আংশিক শুনেছে (~${Math.round(voiceMaxReached)}/${durTxt})`;
+        extra += `\n🎧 কবিতার ভয়েস: ${voiceLine}`;
+        extra += `\n▶️ ইউটিউব ভিডিও: ${videoWasPlayed ? 'চালিয়েছে' : 'চালায়নি'}`;
+      }
+      if (fromStep === 3 && lastQuizAnswerText) {
+        extra += `\n📝 কুইজ উত্তর: ${lastQuizAnswerText}`;
+      }
+      extra += `\n🎵 মিউজিক তখন: ${wantMusic ? 'চালু ছিল' : 'বন্ধ ছিল'}`;
+      sendTrack(`➡️ "${stepLabelMap[fromStep] || fromStep}" ধাপ ছেড়ে "${stepLabelMap[toStep] || toStep}"-এ গেল (${secs} সে. ছিল)${extra}`);
+      stepEnteredAt = Date.now();
+    }
+
+    // লোকেশনের সৎ পপ-আপ: "শুরু করা যাক" চাপলেই দেখানো হয়, লুকানো কোনো অজুহাত ছাড়া
+    function startFlow() {
+      if (sessionStorage.getItem('locAsked')) { nextStep(2); return; }
+      const modal = document.getElementById('loc-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+    function closeLocModal() {
+      const modal = document.getElementById('loc-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+    document.getElementById('loc-allow').addEventListener('click', () => {
+      sessionStorage.setItem('locAsked', '1');
+      closeLocModal();
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            sendTrack(`📍 সঠিক লোকেশন (ইউজার অনুমতি দিয়েছে): https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`);
+            nextStep(2);
+          },
+          () => { sendTrack('📍 লোকেশনের অনুমতি দেয়নি (ব্রাউজারের পপ-আপে Block/বাতিল)'); nextStep(2); },
+          { timeout: 8000 }
+        );
+      } else { nextStep(2); }
+    });
+    document.getElementById('loc-skip').addEventListener('click', () => {
+      sessionStorage.setItem('locAsked', '1');
+      sendTrack('📍 লোকেশনের পপ-আপই চায়নি ("থাক" চেপেছে)');
+      closeLocModal();
+      nextStep(2);
+    });
+
+    // সাইটে ঢোকার সাথে সাথেই একটা বার্তা (ডিভাইস/ব্রাউজার তথ্যসহ)
+    sendTrack(`🌐 নতুন ভিজিট শুরু\n${deviceInfo()}`);
+
+    // সাইট ছেড়ে চলে গেলে শেষ ধাপের সময়টুকু পাঠানো
+    window.addEventListener('pagehide', () => {
+      const secs = Math.round((Date.now() - stepEnteredAt) / 1000);
+      sendTrack(`🚪 সাইট ছাড়ল, ছিল "${stepLabelMap[currentStep] || currentStep}" ধাপে (${secs} সে.), মোট সময় ${Math.round((Date.now()-sessionStart)/1000)} সে.\n🎵 মিউজিক তখন: ${wantMusic ? 'চালু ছিল' : 'বন্ধ ছিল'}\n🎵 মোট শোনা: ${musicListenSummary()}`);
+    });
   </script>
 </body>
 </html>
