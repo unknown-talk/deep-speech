@@ -43,7 +43,8 @@ module.exports = async (req, res) => {
       body: JSON.stringify({ chat_id: chatId, text: fullText, disable_web_page_preview: true })
     });
     const tgJson = await tgRes.json().catch(() => ({}));
-    res.status(200).json({ ok: !!tgJson.ok });
+    // ok না হলে টেলিগ্রামের নিজের এরর-বার্তাটা দেখায়, যাতে সমস্যাটা ধরা যায় (কোনো গোপন তথ্য নয়)
+    res.status(200).json({ ok: !!tgJson.ok, telegram_error: tgJson.ok ? undefined : (tgJson.description || 'unknown') });
   } catch (e) {
     res.status(200).json({ ok: false, error: 'server error' });
   }
