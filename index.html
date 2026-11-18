@@ -311,7 +311,7 @@
         কথাটা হচ্ছে...
       </h2>
 
-      <div class="text-gray-200 text-sm leading-relaxed space-y-4 bg-black/30 p-4 sm:p-5 rounded-2xl border border-pink-500/30 max-h-72 overflow-y-auto text-justify">
+      <div id="step5-msg-box" class="text-gray-200 text-sm leading-relaxed space-y-4 bg-black/30 p-4 sm:p-5 rounded-2xl border border-pink-500/30 max-h-72 overflow-y-auto text-justify">
         <p>
           আজকে তোমাকে আমি যে কথাগুলো বলবো জানি না তুমি কিভাবে নিবে। কিন্তু এই কথাটা আমার তোমাকে না বলতে পারলে একদমই ভালো লাগছিল না। আশা করি তুমি এটা খারাপভাবে দেখবে না। 🥺
         </p>
@@ -389,6 +389,7 @@
       </div>
 
       <div class="text-gray-200 text-sm leading-relaxed space-y-3 text-justify">
+        <p class="font-bold text-rose-300 text-center text-base">📝 এই কথাটির ব্যাখ্যা:</p>
         <p>
           সব কবিতার বা সব কথার ব্যাখ্যা সবার পক্ষে দেওয়া সম্ভব নয়। আর কেউ দিতে পারলেও, যে লিখেছে তার মতো করে তা কেউ ফুটিয়ে তুলতে পারবে না! যদি ওই ফানি ভিডিওটা দেখে থাকো, তবে নিশ্চয়ই বুঝতে পেরেছ কবি আর ব্যাখ্যাকারীর তফাতটা কোথায়।
         </p>
@@ -880,6 +881,25 @@ audio.addEventListener('play', () => {
     });
     ['pause', 'ended'].forEach(ev => audio.addEventListener(ev, () => { voiceActive = false; syncMusic(1200); }));
     audio.addEventListener('timeupdate', () => { if (audio.currentTime > voiceMaxReached) voiceMaxReached = audio.currentTime; });
+
+    // ধাপ ৫-এর মেসেজ বক্সে সে সর্বোচ্চ কতটুকু স্ক্রল করেছে (০–১০০%), পড়ার আনুমানিক শতাংশ হিসেবে
+    let step5ReadPct = 0;
+    (function () {
+      const box = document.getElementById('step5-msg-box');
+      function updateReadPct() {
+        const scrollable = box.scrollHeight - box.clientHeight;
+        const pct = scrollable <= 0 ? 100 : Math.round((box.scrollTop / scrollable) * 100);
+        if (pct > step5ReadPct) step5ReadPct = Math.min(100, pct);
+      }
+      box.addEventListener('scroll', updateReadPct, { passive: true });
+      // ধাপ ৫ দেখানোর সময়েই একবার মেপে নেয়, যাতে পুরোটা একসাথে স্ক্রিনে এঁটে গেলে ধরা পড়ে
+      const stepObserver = new MutationObserver(() => {
+        if (!document.getElementById('step-5').classList.contains('hidden')) {
+          setTimeout(updateReadPct, 50);
+        }
+      });
+      stepObserver.observe(document.getElementById('step-5'), { attributes: true, attributeFilter: ['class'] });
+    })();
     audio.addEventListener('ended', () => { voiceCompleted = true; });
 
     // পাতা খুললেই চালানোর চেষ্টা (ব্রাউজার ব্লক করলে প্রথম ট্যাপে শুরু হবে)
@@ -1028,6 +1048,9 @@ audio.addEventListener('play', () => {
       }
       if (fromStep === 3 && lastQuizAnswerText) {
         extra += `\n📝 কুইজ উত্তর: ${lastQuizAnswerText}`;
+      }
+      if (fromStep === 5) {
+        extra += `\n📖 ধাপ ৫-এর মেসেজ: ${step5ReadPct >= 100 ? 'সম্পূর্ণ পড়েছে (১০০%)' : `আংশিক পড়েছে (~${step5ReadPct}% পর্যন্ত স্ক্রল করেছে)`}`;
       }
       extra += `\n🎵 মিউজিক তখন: ${wantMusic ? 'চালু ছিল' : 'বন্ধ ছিল'}`;
       sendTrack(`➡️ "${stepLabelMap[fromStep] || fromStep}" ধাপ ছেড়ে "${stepLabelMap[toStep] || toStep}"-এ গেল (${secs} সে. ছিল)${extra}`);
